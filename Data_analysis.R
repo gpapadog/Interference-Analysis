@@ -1,7 +1,6 @@
-setwd('~/Documents/Interference/Application/SnCR_Gas_plants/')
+setwd('~/Github/Interference-Analysis/')
 load('~/Dropbox/DATAverse/subdta.dat')
-source('~/Documents/Interference/Application/functions/GetClusters_function.R')
-source('~/Documents/Interference/Application/functions/IndirectEffectPlot_function.R')
+source('GetHierClusters_function.R')
 source('MakeFinalDataset_function.R')
 
 library(rgdal)
@@ -15,18 +14,15 @@ library(gridExtra)
 library(ggplot2)
 
 
-clustering <- 'hierarchical'
 n_neigh <- 50
 hierarchical_method <- 'ward.D2'
 coord_names <- c('Fac.Longitude', 'Fac.Latitude')
 trt_name <- 'SnCR'
 out_name <- 'mean4maxOzone'
 
-dta <- MakeFinalDataset(dta = subdta, clustering = clustering,
-                        n_neigh = n_neigh,
-                        hierarchical_method = hierarchical_method,
-                        coord_names = coord_names, trt_name = trt_name,
-                        out_name = out_name)
+dta <- MakeFinalDataset(dta = subdta, hierarchical_method = hierarchical_method,
+                        n_neigh = n_neigh, coord_names = coord_names,
+                        trt_name = trt_name, out_name = out_name)
 obs_alpha <- dta$obs_alpha
 dta <- dta$data
 
@@ -65,51 +61,23 @@ yhat_group <- GroupIPW(dta = dta, cov_cols = cov_cols, phi_hat = phi_hat,
                        alpha = alpha, trt_col = trt_col, out_col = out_col)
 yhat_group <- yhat_group$yhat_group
 
-ypop_trueps <- YpopTruePS(yhat_group, alpha)
-yhat_pop <- ypop_trueps$ypop
-
 scores <- CalcScore(dta = dta, neigh_ind = NULL, phi_hat = phi_hat,
                     cov_cols = cov_cols, trt_name = 'Trt')
-yhat_pop_var <- VarEstPS(dta = dta, yhat_group = yhat_group,
-                         yhat_pop = yhat_pop, neigh_ind = NULL,
-                         phi_hat = phi_hat, cov_cols = cov_cols,
-                         var_true = ypop_trueps$ypop_var, scores = scores)
+ypop <- Ypop(ygroup = yhat_group, ps = 'estimated', scores = scores)
 
+yhat_pop <- ypop$ypop
+yhat_pop_var <- ypop$ypop_var
 
 # --------- Direct effect ----------- #
-
 de <- DE(ypop = yhat_pop, ypop_var = yhat_pop_var, alpha = alpha)
-de <- rbind(de, low_int = de[1, ] - 1.96 * sqrt(de[2, ]))
-de <- rbind(de, high_int = de[1, ] + 1.96 * sqrt(de[2, ]))
-
-plot(alpha, de[1, ], ylim = range(de[c(1, 3, 4), ]))
-lines(alpha, de[3, ])
-lines(alpha, de[4, ])
-abline(h = 0, col = 'red')
-
 
 
 # --------- Indirect effect ----------- #
-
-ie_var <- IEvar(ygroup = yhat_group[, 1, ], alpha = alpha, ps = 'estimated',
-                scores = scores)
-ie <- IE(ypop = yhat_pop[1, ], ypop_var = ie_var, alpha = alpha)
-
-par(mfrow = c(3, 3), mar = rep(2, 4))
-for (ii in 1 : length(alpha)) {
-  print(sum(ie[3, ii, ] < 0 & ie[4, ii, ] > 0))
-  plot(alpha, ie[1, ii, ], ylim = range(ie[c(1, 3, 4), ii, ]),
-       type = 'l', lwd = 2, main = alpha[ii])
-  lines(alpha, ie[3, ii, ])
-  lines(alpha, ie[4, ii, ])
-  abline(h = 0, col = 'red')
-}
+ie <- IE(ygroup = yhat_group[, 1, ], ps = 'estimated', scores = scores)
 
 
 
-# ---------------------------------------- #
-# ------------ PAPER PLOTTING ------------ #
-# ---------------------------------------- #
+# ------------  PLOTTING ------------ #
 
 de_plot <- data.frame(alpha = alpha, de = de[1, ], low = de[3, ],
                       high = de[4, ])

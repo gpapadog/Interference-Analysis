@@ -1,20 +1,10 @@
-setwd('~/Documents/Interference/Application/SnCR_Gas_plants/')
+setwd('~/Github/Interference-Analysis/')
 load('~/Dropbox/DATAverse/subdta.dat')
-source('~/Documents/Interference/Application/functions/GetClusters_function.R')
-source('~/Documents/Interference/Application/functions/IndirectEffectPlot_function.R')
-source('~/Github/Interference/R/DenomIntegral_function.R')
-source('~/Github/Interference/R/CalcScore_function.R')
-source('~/Github/Interference/R/YpopTruePS_function.R')
-source('~/Github/Interference/R/VarEstPS_function.R')
-source('~/Github/Interference/R/IE_function.R')
-source('~/Github/Interference/R/DE_function.R')
-source('~/Github/Interference/R/delta_method_function.R')
-source('~/Github/Interference/R/IEvar_function.R')
-source('~/Documents/Functions/expit_function.R')
-source('~/Documents/Interference/Perez_Simulations/functions/EricIPW_function.R')
+source('GetHierClusters_function.R')
 source('MakeFinalDataset_function.R')
+source('Old_estimands_IPW_function.R')
 
-
+library(Interference)
 library(rgdal)
 library(raster)
 library(proj4)
@@ -24,21 +14,17 @@ library(gplots)
 library(gridExtra)
 library(ggplot2)
 
-clustering <- 'hierarchical'
 n_neigh <- 50
 hierarchical_method <- 'ward.D2'
 coord_names <- c('Fac.Longitude', 'Fac.Latitude')
 trt_name <- 'SnCR'
 out_name <- 'mean4maxOzone'
 
-dta <- MakeFinalDataset(dta = subdta, clustering = clustering,
-                        n_neigh = n_neigh,
-                        hierarchical_method = hierarchical_method,
-                        coord_names = coord_names, trt_name = trt_name,
-                        out_name = out_name)
+dta <- MakeFinalDataset(dta = subdta, hierarchical_method = hierarchical_method,
+                        n_neigh = n_neigh, coord_names = coord_names,
+                        trt_name = trt_name, out_name = out_name)
 obs_alpha <- dta$obs_alpha
 dta <- dta$data
-
 
 # ----------- Fitting the propensity score model ------------ #s
 
@@ -61,6 +47,9 @@ glmod <- glmer(as.formula(glm_form), data = dta, family = 'binomial',
                control = glmerControl(optimizer = "bobyqa",
                                       optCtrl = list(maxfun = 2e5)))
 
+phi_hat <- list(coefs = summary(glmod)$coef[, 1],
+                re_var = as.numeric(summary(glmod)$varcor))
+
 
 # ----------- Calculating the IPW ----------- #
 
@@ -68,9 +57,6 @@ setnames(dta, 'Trt', 'A')
 setnames(dta, 'mean4maxOzone', 'Y')
 dta <- as.data.frame(dta)
 
-
-phi_hat <- list(coefs = summary(glmod)$coef[, 1],
-                re_var = as.numeric(summary(glmod)$varcor))
 trt_col <- which(names(dta) == 'Trt')
 out_col <- which(names(dta) == out_name)
 alpha_range <- quantile(obs_alpha$V1[! (obs_alpha$V1 %in% c(0, 1))], probs = c(0.2, 0.8))
@@ -79,35 +65,21 @@ alpha <- seq(alpha_range[1], alpha_range[2], length.out = 40)
 
 n_neigh <- length(unique(dta$neigh))
 neigh_ind <- sapply(1 : n_neigh, function(x) which(dta$neigh == x))
-yhat <- EricIPW(alpha, dta, neigh_ind, phi_hat, phi_hat, cov_cols)
-
-yhat_group <-  yhat$yhat_est
-ypop_trueps <- YpopTruePS(yhat_group, alpha, use = 'everything')
-yhat_pop <- ypop_trueps$ypop
+yhat_group <- Old_IPW(alpha, dta, neigh_ind, phi_hat, cov_cols)
 
 scores <- CalcScore(dta = dta, neigh_ind = NULL, phi_hat = phi_hat,
                     cov_cols = cov_cols, trt_name = 'A')
+ypop <- Ypop(ygroup = yhat_group, ps = 'estimated', scores = scores)
 
-
-yhat_pop_var <- VarEstPS(dta = dta, yhat_group = yhat_group,
-                         var_true = ypop_trueps$ypop_var,
-                         yhat_pop = yhat_pop,
-                         neigh_ind = neigh_ind, phi_hat = phi_hat,
-                         cov_cols = cov_cols, scores = scores)
+yhat_pop <- ypop$ypop
+yhat_pop_var <- ypop$ypop_var
 
 
 # --------- Direct effect ----------- #
-
 de <- DE(ypop = yhat_pop, ypop_var = yhat_pop_var, alpha = alpha)
-de <- rbind(de, low_int = de[1, ] - 1.96 * sqrt(de[2, ]))
-de <- rbind(de, high_int = de[1, ] + 1.96 * sqrt(de[2, ]))
-
 
 # --------- Indirect effect ----------- #
-
-ie_var <- IEvar(ygroup = yhat_group[, 1, ], alpha = alpha, ps = 'estimated',
-                scores = scores)
-ie <- IE(ypop = yhat_pop[1, ], ypop_var = ie_var, alpha = alpha)
+ie <- IE(ygroup = yhat_group[, 1, ], ps = 'estimated', scores = scores)
 
 
 

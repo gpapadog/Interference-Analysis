@@ -1,7 +1,6 @@
-setwd('~/Documents/Interference/Application/SnCR_Gas_plants/')
+setwd('~/Github/Interference-Analysis/')
 load('~/Dropbox/DATAverse/subdta.dat')
-source('~/Documents/Interference/Application/functions/GetClusters_function.R')
-source('~/Documents/Interference/Application/functions/IndirectEffectPlot_function.R')
+source('GetHierClusters_function.R')
 source('MakeFinalDataset_function.R')
 
 library(rgdal)
@@ -35,8 +34,7 @@ plot_data <- NULL
 
 for (cc in 1 : length(n_neigh)) {
   
-  dta <- MakeFinalDataset(dta = subdta, clustering = clustering,
-                          n_neigh = n_neigh[cc],
+  dta <- MakeFinalDataset(dta = subdta, n_neigh = n_neigh[cc],
                           hierarchical_method = hierarchical_method[cc],
                           coord_names = coord_names, trt_name = trt_name,
                           out_name = out_name)
@@ -75,23 +73,16 @@ for (cc in 1 : length(n_neigh)) {
                          alpha = alpha, trt_col = trt_col, out_col = out_col)
   yhat_group <- yhat_group$yhat_group
   
-  ypop_trueps <- YpopTruePS(yhat_group, alpha)
-  yhat_pop <- ypop_trueps$ypop
-  
   scores <- CalcScore(dta = dta, neigh_ind = NULL, phi_hat = phi_hat,
                       cov_cols = cov_cols, trt_name = 'Trt')
-  yhat_pop_var <- VarEstPS(dta = dta, yhat_group = yhat_group,
-                           yhat_pop = yhat_pop, neigh_ind = NULL,
-                           phi_hat = phi_hat, cov_cols = cov_cols,
-                           var_true = ypop_trueps$ypop_var, scores = scores)
-
+  ypop <- Ypop(ygroup = yhat_group, ps = 'estimated', scores = scores)
+  
+  yhat_pop <- ypop$ypop
+  yhat_pop_var <- ypop$ypop_var
+  
   de <- DE(ypop = yhat_pop, ypop_var = yhat_pop_var, alpha = alpha)
-  de <- rbind(de, low_int = de[1, ] - 1.96 * sqrt(de[2, ]))
-  de <- rbind(de, high_int = de[1, ] + 1.96 * sqrt(de[2, ]))
-
-  ie_var <- IEvar(ygroup = yhat_group[, 1, ], alpha = alpha, ps = 'estimated',
-                  scores = scores)
-  ie <- IE(ypop = yhat_pop[1, ], ypop_var = ie_var, alpha = alpha)
+  
+  ie <- IE(ygroup = yhat_group[, 1, ], ps = 'estimated', scores = scores)
   
   
   a1 <- which(alpha == extra_alphas[1])

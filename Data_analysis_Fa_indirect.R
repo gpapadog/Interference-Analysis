@@ -1,7 +1,6 @@
-setwd('~/Documents/Interference/Application/SnCR_Gas_plants/')
+setwd('~/Github/Interference-Analysis/')
 load('~/Dropbox/DATAverse/subdta.dat')
-source('~/Documents/Interference/Application/functions/GetClusters_function.R')
-source('~/Documents/Interference/Application/functions/IndirectEffectPlot_function.R')
+source('GetHierClusters_function.R')
 source('MakeFinalDataset_function.R')
 
 library(rgdal)
@@ -15,18 +14,15 @@ library(gridExtra)
 library(ggplot2)
 
 
-clustering <- 'hierarchical'
 n_neigh <- 50
 hierarchical_method <- 'ward.D2'
 coord_names <- c('Fac.Longitude', 'Fac.Latitude')
 trt_name <- 'SnCR'
 out_name <- 'mean4maxOzone'
 
-dta <- MakeFinalDataset(dta = subdta, clustering = clustering,
-                        n_neigh = n_neigh,
-                        hierarchical_method = hierarchical_method,
-                        coord_names = coord_names, trt_name = trt_name,
-                        out_name = out_name)
+dta <- MakeFinalDataset(dta = subdta, hierarchical_method = hierarchical_method,
+                        n_neigh = n_neigh, coord_names = coord_names,
+                        trt_name = trt_name, out_name = out_name)
 obs_alpha <- dta$obs_alpha
 dta <- dta$data
 
@@ -110,20 +106,20 @@ p2 <- probs$hypoth_prob[probs$in_range == 1]
 trt_col <- which(names(dta) == 'Trt')
 out_col <- which(names(dta) == out_name)
 
+
 yhat_group <- GroupIPW(dta = dta, cov_cols = cov_cols, phi_hat = phi_hat,
                        alpha = alpha, trt_col = trt_col,
                        out_col = out_col)$yhat_group
 
-ypop_trueps <- YpopTruePS(yhat_group, alpha)
-yhat_pop <- ypop_trueps$ypop
-
 scores <- CalcScore(dta = dta, neigh_ind = NULL, phi_hat = phi_hat,
                     cov_cols = cov_cols, trt_name = 'Trt')
 
+yhat_pop <- Ypop(ygroup = yhat_group)$ypop
+
+
 # --------- Indirect effect ----------- #
 
-ie_var <- IEvar(ygroup = yhat_group[, 1, ], alpha = alpha, ps = 'estimated',
-                scores = scores)
+ie_var <- IEvar(ygroup = yhat_group[, 1, ], ps = 'estimated', scores = scores)
 
 prob_diff <- p2 - p1
 ie_Falpha <- c(est = sum(prob_diff * yhat_pop[1, ]),

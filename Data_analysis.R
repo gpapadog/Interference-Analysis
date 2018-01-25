@@ -19,6 +19,8 @@ hierarchical_method <- 'ward.D2'
 coord_names <- c('Fac.Longitude', 'Fac.Latitude')
 trt_name <- 'SnCR'
 out_name <- 'mean4maxOzone'
+estimand <- '1'  # Set to '1' for the estimand depending on covariates.
+                 # Set to '2' for pi-estimand.
 
 dta <- MakeFinalDataset(dta = subdta, hierarchical_method = hierarchical_method,
                         n_neigh = n_neigh, coord_names = coord_names,
@@ -58,7 +60,8 @@ alpha_range <- quantile(obs_alpha$V1[! (obs_alpha$V1 %in% c(0, 1))], probs = c(0
 alpha <- seq(alpha_range[1], alpha_range[2], length.out = 40)
 
 yhat_group <- GroupIPW(dta = dta, cov_cols = cov_cols, phi_hat = phi_hat,
-                       alpha = alpha, trt_col = trt_col, out_col = out_col)
+                       alpha = alpha, trt_col = trt_col, out_col = out_col,
+                       estimand = estimand)
 yhat_group <- yhat_group$yhat_group
 
 scores <- CalcScore(dta = dta, neigh_ind = NULL, phi_hat = phi_hat,

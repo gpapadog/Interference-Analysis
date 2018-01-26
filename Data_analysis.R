@@ -66,7 +66,7 @@ yhat_group <- yhat_group$yhat_group
 
 scores <- CalcScore(dta = dta, neigh_ind = NULL, phi_hat = phi_hat,
                     cov_cols = cov_cols, trt_name = 'Trt')
-ypop <- Ypop(ygroup = yhat_group, ps = 'estimated', scores = scores)
+ypop <- Ypop(ygroup = yhat_group, ps = 'estimated', scores = scores, dta = dta)
 
 yhat_pop <- ypop$ypop
 yhat_pop_var <- ypop$ypop_var

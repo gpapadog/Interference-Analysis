@@ -22,7 +22,7 @@ out_name <- 'mean4maxOzone'
 
 dta <- MakeFinalDataset(dta = subdta, hierarchical_method = hierarchical_method,
                         n_neigh = n_neigh, coord_names = coord_names,
-                        trt_name = trt_name, out_name = out_name)
+                        trt_name = trt_name, subset_clusters = FALSE)
 obs_alpha <- dta$obs_alpha
 dta <- dta$data
 
@@ -52,12 +52,10 @@ phi_hat <- list(coefs = summary(glmod)$coef[, 1],
 
 
 # What counterfactual F alpha are we considering?
-alpha_range <- quantile(obs_alpha$V1[! (obs_alpha$V1 %in% c(0, 1))], probs = c(0.2, 0.8))
+alpha_range <- quantile(obs_alpha$V1, probs = c(0.2, 0.8))
+probs <- data.frame(alpha = unique(sort(obs_alpha$V1)))
 
-nonzero_alpha <- obs_alpha$V1[obs_alpha$V1 != 0]
-probs <- data.frame(alpha = unique(sort(nonzero_alpha)))
-
-probs$n_clust <- sapply(probs$alpha, function(x) sum(nonzero_alpha == x))
+probs$n_clust <- sapply(probs$alpha, function(x) sum(obs_alpha$V1 == x))
 probs$obs_prob <- probs$n_clust / sum(probs$n_clust)
 
 probs$in_range <- ifelse(probs$alpha > alpha_range[1] & probs$alpha < alpha_range[2], 1, 0)
@@ -68,7 +66,7 @@ probs$obs_prob_in[wh] <- probs$obs_prob[wh]
 probs$obs_prob_in <- probs$obs_prob_in / sum(probs$obs_prob_in)
 
 probs$hypoth_prob <- 0
-wh <- which(probs$in_range == 1 & probs$alpha > median(nonzero_alpha))
+wh <- which(probs$in_range == 1 & probs$alpha > median(obs_alpha$V1))
 probs$hypoth_prob[wh] <- probs$obs_prob[wh] / sum(probs$obs_prob[wh])
 
 
@@ -91,7 +89,10 @@ ggplot(aes(x = alpha, y = prob), data = plot_Falphas) +
   xlab(expression(alpha)) +
   ylab('Probability mass function') +
   facet_wrap(~ Distribution) + coord_flip() +
-  theme(panel.spacing = unit(2, "lines"))
+  theme(panel.spacing = unit(1, "lines"),
+        strip.text = element_text(size = 12),
+        axis.title = element_text(size = 12))
+
 
 
 alpha <- probs$alpha[probs$in_range == 1]

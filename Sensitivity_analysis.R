@@ -28,7 +28,7 @@ cov_names <- c('pctCapacity_byHI', 'logHeatInput', 'Phase2', 'mostlyGas',
                'MedianHHInc', 'PctPoor', 'PctOccupied', 'PctMovedIn5',
                'MedianHValue', 'logPopPerSQM')
 
-extra_alphas <- c(0.226, 0.414)
+extra_alphas <- c(0.1, 0.4)
 
 plot_data <- NULL
 
@@ -37,7 +37,7 @@ for (cc in 1 : length(n_neigh)) {
   dta <- MakeFinalDataset(dta = subdta, n_neigh = n_neigh[cc],
                           hierarchical_method = hierarchical_method[cc],
                           coord_names = coord_names, trt_name = trt_name,
-                          out_name = out_name)
+                          subset_clusters = FALSE)
   obs_alpha <- dta$obs_alpha
   dta <- dta$data
 
@@ -65,9 +65,10 @@ for (cc in 1 : length(n_neigh)) {
   trt_col <- which(names(dta) == 'Trt')
   out_col <- which(names(dta) == out_name)
   
-  alpha_range <- quantile(obs_alpha$V1[! (obs_alpha$V1 %in% c(0, 1))], probs = c(0.2, 0.8))
+  alpha_range <- quantile(obs_alpha$V1, probs = c(0.2, 0.8))
   alpha <- seq(alpha_range[1], alpha_range[2], length.out = 40)
   alpha <- sort(c(alpha, extra_alphas))
+  alpha[1] <- ifelse(alpha[1] == 0, 0.001, alpha[1])
   
   yhat_group <- GroupIPW(dta = dta, cov_cols = cov_cols, phi_hat = phi_hat,
                          alpha = alpha, trt_col = trt_col, out_col = out_col)
@@ -81,7 +82,6 @@ for (cc in 1 : length(n_neigh)) {
   yhat_pop_var <- ypop$ypop_var
   
   de <- DE(ypop = yhat_pop, ypop_var = yhat_pop_var, alpha = alpha)
-  
   ie <- IE(ygroup = yhat_group[, 1, ], ps = 'estimated', scores = scores)
   
   
@@ -113,32 +113,37 @@ ncol <- 3
 g[[1]] <- ggplot(aes(x = alpha, y = est, ymin = LB, ymax = UB),
                  data = subset(plot_data, quant == 'DE')) +
   geom_line() +
-  facet_wrap(~ method, nrow = nrow, ncol = ncol) +
+  facet_wrap(~ method, nrow = nrow, ncol = ncol, scales = 'free_x') +
   ylab(expression(DE(alpha))) +
   geom_ribbon(alpha=0.3) +
   geom_hline(yintercept = 0, linetype = 2) +
   labs(x = NULL) +
-  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+        strip.text = element_text(size = 12))
 
 g[[2]] <- ggplot(aes(x = alpha, y = est, ymin = LB, ymax = UB),
                  data = subset(plot_data, quant == 'IE1')) +
   geom_line() +
-  facet_wrap(~ method, nrow = nrow, ncol = ncol) +
-  ylab(expression(IE(0.226,alpha))) +
+  facet_wrap(~ method, nrow = nrow, ncol = ncol, scales = 'free_x') +
+  ylab(expression(IE(0.1,alpha))) +
   geom_ribbon(alpha=0.3) +
   geom_hline(yintercept = 0, linetype = 2) +
   labs(x = NULL) +
-  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank(),
+        strip.background = element_blank(),
+        strip.text.x = element_blank())
 
 g[[3]] <- ggplot(aes(x = alpha, y = est, ymin = LB, ymax = UB),
                  data = subset(plot_data, quant == 'IE2')) +
   geom_line() +
-  facet_wrap(~ method, nrow = nrow, ncol = ncol) +
-  ylab(expression(IE(0.414,alpha))) +
-  geom_ribbon(alpha=0.3) +
+  facet_wrap(~ method, nrow = nrow, ncol = ncol, scales = 'free_x') +
+  ylab(expression(IE(0.4,alpha))) +
+  geom_ribbon(alpha = 0.3) +
   geom_hline(yintercept = 0, linetype = 2) +
-  xlab(expression(alpha))
+  xlab(expression(alpha)) +
+  theme(strip.background = element_blank(),
+        strip.text.x = element_blank())
 
 
+grid.arrange(grobs = g, nrow = ncol, ncol = nrow, heights = c(1, 0.9, 1))
 
-grid.arrange(grobs = g, nrow = ncol, ncol = nrow)

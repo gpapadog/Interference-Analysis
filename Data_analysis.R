@@ -24,7 +24,7 @@ estimand <- '1'  # Set to '1' for the estimand depending on covariates.
 
 dta <- MakeFinalDataset(dta = subdta, hierarchical_method = hierarchical_method,
                         n_neigh = n_neigh, coord_names = coord_names,
-                        trt_name = trt_name, out_name = out_name)
+                        trt_name = trt_name, subset_clusters = FALSE)
 obs_alpha <- dta$obs_alpha
 dta <- dta$data
 
@@ -56,8 +56,9 @@ phi_hat <- list(coefs = summary(glmod)$coef[, 1],
 
 trt_col <- which(names(dta) == 'Trt')
 out_col <- which(names(dta) == out_name)
-alpha_range <- quantile(obs_alpha$V1[! (obs_alpha$V1 %in% c(0, 1))], probs = c(0.2, 0.8))
+alpha_range <- quantile(obs_alpha$V1, probs = c(0.2, 0.8))
 alpha <- seq(alpha_range[1], alpha_range[2], length.out = 40)
+alpha <- sort(c(alpha, 0.1, 0.4))
 
 yhat_group <- GroupIPW(dta = dta, cov_cols = cov_cols, phi_hat = phi_hat,
                        alpha = alpha, trt_col = trt_col, out_col = out_col,
@@ -84,30 +85,48 @@ ie <- IE(ygroup = yhat_group[, 1, ], ps = 'estimated', scores = scores)
 
 de_plot <- data.frame(alpha = alpha, de = de[1, ], low = de[3, ],
                       high = de[4, ])
-g_de <- ggplot() + geom_line(aes(alpha, de), data = de_plot) +
-  geom_ribbon(data = de_plot, aes(x = alpha, ymin = low, ymax = high),
-              alpha=0.3) +
-  geom_abline(intercept = 0, slope = 0, linetype = 2) +
-  ylab(expression(DE(alpha))) + xlab(expression(alpha))
+a1 <- which(alpha == 0.1)
+ie1_plot <- as.data.frame(t(ie[c(1, 3, 4), a1, ]))
+a1 <- which(alpha == 0.4)
+ie2_plot <- as.data.frame(t(ie[c(1, 3, 4), a1, ]))
+
+res_array <- array(NA, dim = c(length(alpha), 3, 3))
+dimnames(res_array) <- list(alpha = alpha, quant = c('DE', 'IE1', 'IE2'),
+                            stat = c('est', 'LB', 'HB'))
+res_array[, 1, ] <- as.matrix(de_plot[, - 1])
+res_array[, 2, ] <- as.matrix(ie1_plot)
+res_array[, 3, ] <- as.matrix(ie2_plot)
+
+res_df <- plyr::adply(res_array[, , 1], 1 : 2)
+res_df$LB <- c(de_plot$low, ie1_plot$LB, ie2_plot$LB)
+res_df$UB <- c(de_plot$high, ie1_plot$UB, ie2_plot$UB)
+
+f_names <- list('DE' = expression(DE(alpha)),
+                'IE1' = expression(IE(0.1,alpha)),
+                'IE2' = expression(IE(0.4,alpha)))
+f_labeller <- function(variable, value){
+  return(f_names[value])
+}
+res_df$alpha <- as.numeric(levels(res_df$alpha))[res_df$alpha]
 
 
-a1 <- c(1, 10, 20, 30, 40)
-g_ie <- NULL
-
-for (ii in a1) {
-  
-  ie_plot <- as.data.frame(t(ie[c(1, 3, 4), ii, ]))
-  names(ie_plot) <- c('ie', 'low', 'high')
-
-  g_ie1 <- ggplot() + geom_line(aes(alpha, ie), data = ie_plot) +
-    geom_ribbon(data = ie_plot, aes(x = alpha, ymin = low, ymax = high),
-                alpha = 0.3) +
-    geom_abline(intercept = 0, slope = 0, linetype = 2) +
-    ylab(paste0('IE(', round(alpha[ii], 3), ',', expression(alpha), ')')) +
-    xlab(expression(alpha))
-  
-  g_ie[[length(g_ie) + 1]] <- g_ie1
-} 
+ggplot(data = res_df, aes(x = alpha, y = V1, group = quant)) +  geom_line() +
+  facet_wrap(~ quant, nrow = 1, labeller = f_labeller) +
+  geom_ribbon(data = res_df, aes(ymin = LB, ymax = UB, group = quant), alpha = 0.3) +
+  xlab(expression(alpha)) + ylab('') +
+  theme(axis.title = element_text(size = 12),
+        strip.text = element_text(size = 13),
+        axis.text = element_text(size = 10)) +
+  scale_x_continuous(breaks = seq(0.1, 0.4, by = 0.1)) +
+  geom_hline(yintercept = 0, linetype = 2)
 
 
-grid.arrange(grobs = append(list(g_de), g_ie[c(2, 4)]), ncol = 3)
+
+library(plot3D)
+par(mar = c(1, 1, 1, 3))
+persp3D(alpha, alpha, ie[1, , ], theta=50, phi=50, axes=TRUE,
+        nticks=5, ticktype = "detailed", xlab='α1', ylab='α2', zlab='',
+        colkey = list(length = 0.5, shift = -0.1))
+
+
+

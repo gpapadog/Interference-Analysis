@@ -2,6 +2,7 @@ setwd('~/Github/Interference-Analysis/')
 load('~/Dropbox/DATAverse/subdta.dat')
 source('GetHierClusters_function.R')
 source('MakeFinalDataset_function.R')
+set.seed(1234)
 
 library(rgdal)
 library(raster)
@@ -21,6 +22,9 @@ trt_name <- 'SnCR'
 out_name <- 'mean4maxOzone'
 estimand <- '1'  # Set to '1' for the estimand depending on covariates.
                  # Set to '2' for pi-estimand.
+B <- 500
+ps_with_re <- TRUE
+num_alphas <- 40
 
 dta <- MakeFinalDataset(dta = subdta, hierarchical_method = hierarchical_method,
                         n_neigh = n_neigh, coord_names = coord_names,
@@ -57,38 +61,57 @@ phi_hat <- list(coefs = summary(glmod)$coef[, 1],
 trt_col <- which(names(dta) == 'Trt')
 out_col <- which(names(dta) == out_name)
 alpha_range <- quantile(obs_alpha$V1, probs = c(0.2, 0.8))
-alpha <- seq(alpha_range[1], alpha_range[2], length.out = 40)
+alpha <- seq(alpha_range[1], alpha_range[2], length.out = num_alphas)
 alpha <- sort(c(alpha, 0.1, 0.4))
+
 
 yhat_group <- GroupIPW(dta = dta, cov_cols = cov_cols, phi_hat = phi_hat,
                        alpha = alpha, trt_col = trt_col, out_col = out_col,
-                       estimand = estimand)
-yhat_group <- yhat_group$yhat_group
+                       estimand = estimand)$yhat_group
 
 scores <- CalcScore(dta = dta, neigh_ind = NULL, phi_hat = phi_hat,
                     cov_cols = cov_cols, trt_name = 'Trt')
-ypop <- Ypop(ygroup = yhat_group, ps = 'estimated', scores = scores, dta = dta)
 
+ypop <- Ypop(ygroup = yhat_group, ps = 'estimated', scores = scores, dta = dta)
 yhat_pop <- ypop$ypop
 yhat_pop_var <- ypop$ypop_var
 
-# --------- Direct effect ----------- #
-de <- DE(ypop = yhat_pop, ypop_var = yhat_pop_var, alpha = alpha)
+ps_info_est <- list(glm_form = glm_form, ps_with_re = ps_with_re,
+                    gamma_numer = phi_hat[[1]], use_control = TRUE)
+boots_est <- BootVar(dta = dta, B = B, alpha = alpha, ps = 'est',
+                     cov_cols = cov_cols, ps_info_est = ps_info_est,
+                     verbose = TRUE, trt_col = trt_col, out_col = out_col,
+                     return_everything = TRUE)
 
+re_var_positive <- boots_est$re_var_positive
+table(re_var_positive)
+boots <- boots_est$boots
+
+
+# --------- Direct effect ----------- #
+de <- DE(ypop = yhat_pop, ypop_var = yhat_pop_var, boots = boots,
+         alpha = alpha)
 
 # --------- Indirect effect ----------- #
-ie <- IE(ygroup = yhat_group[, 1, ], ps = 'estimated', scores = scores)
-
+ie <- IE(ygroup = yhat_group[, 1, ], ps = 'estimated', boots = boots,
+         scores = scores)
 
 
 # ------------  PLOTTING ------------ #
 
-de_plot <- data.frame(alpha = alpha, de = de[1, ], low = de[3, ],
-                      high = de[4, ])
+plot_boot <- 3
+index_low <- ifelse(plot_boot == 1, 3, ifelse(plot_boot == 2, 6, 8))
+index_high <- index_low + 1
+
+de_plot <- data.frame(alpha = alpha, de = de[1, ],
+                      low = de[index_low, ], high = de[index_high, ])
 a1 <- which(alpha == 0.1)
-ie1_plot <- as.data.frame(t(ie[c(1, 3, 4), a1, ]))
+ie1_plot <- data.frame(ie = ie[1, a1, ], low = ie[index_low, a1, ],
+                       high = ie[index_high, a1, ])
+
 a1 <- which(alpha == 0.4)
-ie2_plot <- as.data.frame(t(ie[c(1, 3, 4), a1, ]))
+ie2_plot <- data.frame(ie = ie[1, a1, ], low = ie[index_low, a1, ],
+                       high = ie[index_high, a1, ])
 
 res_array <- array(NA, dim = c(length(alpha), 3, 3))
 dimnames(res_array) <- list(alpha = alpha, quant = c('DE', 'IE1', 'IE2'),
@@ -98,8 +121,8 @@ res_array[, 2, ] <- as.matrix(ie1_plot)
 res_array[, 3, ] <- as.matrix(ie2_plot)
 
 res_df <- plyr::adply(res_array[, , 1], 1 : 2)
-res_df$LB <- c(de_plot$low, ie1_plot$LB, ie2_plot$LB)
-res_df$UB <- c(de_plot$high, ie1_plot$UB, ie2_plot$UB)
+res_df$LB <- c(de_plot$low, ie1_plot$low, ie2_plot$low)
+res_df$UB <- c(de_plot$high, ie1_plot$high, ie2_plot$high)
 
 f_names <- list('DE' = expression(DE(alpha)),
                 'IE1' = expression(IE(0.1,alpha)),

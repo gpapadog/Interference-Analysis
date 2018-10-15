@@ -12,13 +12,16 @@ library(data.table)
 library(gplots)
 library(gridExtra)
 library(ggplot2)
-
+set.seed(1234)
 
 n_neigh <- 50
 hierarchical_method <- 'ward.D2'
 coord_names <- c('Fac.Longitude', 'Fac.Latitude')
 trt_name <- 'SnCR'
 out_name <- 'mean4maxOzone'
+ps_with_re <- TRUE
+B <- 500
+alpha_level <- 0.05
 
 dta <- MakeFinalDataset(dta = subdta, hierarchical_method = hierarchical_method,
                         n_neigh = n_neigh, coord_names = coord_names,
@@ -111,23 +114,35 @@ out_col <- which(names(dta) == out_name)
 yhat_group <- GroupIPW(dta = dta, cov_cols = cov_cols, phi_hat = phi_hat,
                        alpha = alpha, trt_col = trt_col,
                        out_col = out_col)$yhat_group
-
-scores <- CalcScore(dta = dta, neigh_ind = NULL, phi_hat = phi_hat,
-                    cov_cols = cov_cols, trt_name = 'Trt')
-
 yhat_pop <- Ypop(ygroup = yhat_group)$ypop
 
 
-# --------- Indirect effect ----------- #
+ps_info_est <- list(glm_form = glm_form, ps_with_re = ps_with_re,
+                    gamma_numer = phi_hat[[1]], use_control = TRUE)
+boots <- BootVar(dta = dta, B = B, alpha = alpha, ps = 'est',
+                 cov_cols = cov_cols, ps_info_est = ps_info_est,
+                 verbose = TRUE, trt_col = trt_col, out_col = out_col,
+                 return_everything = FALSE)
 
+
+
+# --------- Asymptotic variance  ----------- #
+
+scores <- CalcScore(dta = dta, neigh_ind = NULL, phi_hat = phi_hat,
+                    cov_cols = cov_cols, trt_name = 'Trt')
 ie_var <- IEvar(ygroup = yhat_group[, 1, ], ps = 'estimated', scores = scores)
 
 prob_diff <- p2 - p1
 ie_Falpha <- c(est = sum(prob_diff * yhat_pop[1, ]),
                var = delta_method(ie_var, vec = prob_diff))
-rep(as.numeric(ie_Falpha[1]), 3) + c(- 1, 0, 1) * 1.96 * sqrt(ie_Falpha[2])
+rep(as.numeric(ie_Falpha[1]), 3) +
+  c(- 1, 0, 1) * qnorm(1 - alpha_level / 2) * sqrt(ie_Falpha[2])
 
 
+# ------ Bootstrap confidence interval ------------ #
+
+boots_ie <- apply(boots[1, , ], 2, function(x) sum(x * prob_diff))
+c(ie_Falpha[1], quantile(boots_ie, probs = c(0, 1) + c(1, - 1) * alpha_level / 2))
 
 
 

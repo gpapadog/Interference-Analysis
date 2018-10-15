@@ -21,6 +21,11 @@ method_name <- c('Ward 30', 'Ward 70', 'Complete 50')
 coord_names <- c('Fac.Longitude', 'Fac.Latitude')
 trt_name <- 'SnCR'
 out_name <- 'mean4maxOzone'
+ps_with_re <- TRUE
+B <- 3
+alpha_level <- 0.05
+num_alphas <- 5
+
 
 cov_names <- c('pctCapacity_byHI', 'logHeatInput', 'Phase2', 'mostlyGas',
                'small_nunits', 'med_nunits', 'mean4MaxTemp', 'PctUrban',
@@ -33,6 +38,8 @@ extra_alphas <- c(0.1, 0.4)
 plot_data <- NULL
 
 for (cc in 1 : length(n_neigh)) {
+  
+  set.seed(1234)
   
   dta <- MakeFinalDataset(dta = subdta, n_neigh = n_neigh[cc],
                           hierarchical_method = hierarchical_method[cc],
@@ -66,7 +73,7 @@ for (cc in 1 : length(n_neigh)) {
   out_col <- which(names(dta) == out_name)
   
   alpha_range <- quantile(obs_alpha$V1, probs = c(0.2, 0.8))
-  alpha <- seq(alpha_range[1], alpha_range[2], length.out = 40)
+  alpha <- seq(alpha_range[1], alpha_range[2], length.out = num_alphas)
   alpha <- sort(c(alpha, extra_alphas))
   alpha[1] <- ifelse(alpha[1] == 0, 0.001, alpha[1])
   
@@ -76,13 +83,23 @@ for (cc in 1 : length(n_neigh)) {
   
   scores <- CalcScore(dta = dta, neigh_ind = NULL, phi_hat = phi_hat,
                       cov_cols = cov_cols, trt_name = 'Trt')
-  ypop <- Ypop(ygroup = yhat_group, ps = 'estimated', scores = scores)
+  ypop <- Ypop(ygroup = yhat_group, ps = 'estimated', scores = scores,
+               dta = dta)
   
   yhat_pop <- ypop$ypop
   yhat_pop_var <- ypop$ypop_var
   
-  de <- DE(ypop = yhat_pop, ypop_var = yhat_pop_var, alpha = alpha)
-  ie <- IE(ygroup = yhat_group[, 1, ], ps = 'estimated', scores = scores)
+  ps_info_est <- list(glm_form = glm_form, ps_with_re = ps_with_re,
+                      gamma_numer = phi_hat[[1]], use_control = TRUE)
+  boots_est <- BootVar(dta = dta, B = B, alpha = alpha, ps = 'est',
+                       cov_cols = cov_cols, ps_info_est = ps_info_est,
+                       verbose = TRUE, trt_col = trt_col, out_col = out_col,
+                       return_everything = FALSE)
+  
+  de <- DE(ypop = yhat_pop, ypop_var = yhat_pop_var, boots = boots_est,
+           alpha = alpha)
+  ie <- IE(ygroup = yhat_group[, 1, ], ps = 'estimated', scores = scores,
+           boots = boots_est)
   
   
   a1 <- which(alpha == extra_alphas[1])
@@ -92,9 +109,9 @@ for (cc in 1 : length(n_neigh)) {
   x <- data.frame(alpha = rep(alpha, 3), quant = all_quant,
                   method = method_name[cc],
                   est = NA, LB = NA, UB = NA)
-  x[1 : length(alpha), 4 : 6] <- t(de[c(1, 3, 4), ])
-  x[(length(alpha) + 1) : (2 * length(alpha)), 4 : 6] <- t(ie[c(1, 3, 4), a1, ])
-  x[(2 * length(alpha) + 1) : (3 * length(alpha)), 4 : 6] <- t(ie[c(1, 3, 4), a2, ])
+  x[1 : length(alpha), 4 : 6] <- t(de[c(1, 8, 9), ])
+  x[(length(alpha) + 1) : (2 * length(alpha)), 4 : 6] <- t(ie[c(1, 8, 9), a1, ])
+  x[(2 * length(alpha) + 1) : (3 * length(alpha)), 4 : 6] <- t(ie[c(1, 8, 9), a2, ])
   
   plot_data <- rbind(plot_data, x)
 }

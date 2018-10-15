@@ -22,7 +22,7 @@ trt_name <- 'SnCR'
 out_name <- 'mean4maxOzone'
 estimand <- '1'  # Set to '1' for the estimand depending on covariates.
                  # Set to '2' for pi-estimand.
-B <- 500
+B <- 2000
 ps_with_re <- TRUE
 num_alphas <- 40
 
@@ -90,11 +90,11 @@ boots <- boots_est$boots
 
 # --------- Direct effect ----------- #
 de <- DE(ypop = yhat_pop, ypop_var = yhat_pop_var, boots = boots,
-         alpha = alpha)
+         alpha = alpha, alpha_level = 0.05)
 
 # --------- Indirect effect ----------- #
 ie <- IE(ygroup = yhat_group[, 1, ], ps = 'estimated', boots = boots,
-         scores = scores)
+         scores = scores, alpha_level = 0.05)
 
 
 # ------------  PLOTTING ------------ #
@@ -143,6 +143,12 @@ ggplot(data = res_df, aes(x = alpha, y = V1, group = quant)) +  geom_line() +
   scale_x_continuous(breaks = seq(0.1, 0.4, by = 0.1)) +
   geom_hline(yintercept = 0, linetype = 2)
 
+
+res <- list(yhat_group = yhat_group, scores = scores, yhat_pop = yhat_pop,
+            yhat_pop_var = yhat_pop_var, boots = boots, de = de, ie = ie)
+res$specs <- list(seed = 1234, B = B, num_alphas = num_alphas,
+                  date = Sys.Date())
+save(res, file = '~/Documents/Research/Interference/Revisions/Application/results2.dat')
 
 
 library(plot3D)

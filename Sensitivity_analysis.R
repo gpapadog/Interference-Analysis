@@ -15,9 +15,9 @@ library(ggplot2)
 
 
 clustering <- 'hierarchical'
-n_neigh <- c(30, 70, 50)
-hierarchical_method <- c('ward.D2', 'ward.D2', 'complete')
-method_name <- c('Ward 30', 'Ward 70', 'Complete 50')
+n_neigh <- c(70, 50)
+hierarchical_method <- c('ward.D2', 'complete')
+method_name <- c('Ward 70', 'Complete 50')
 coord_names <- c('Fac.Longitude', 'Fac.Latitude')
 trt_name <- 'SnCR'
 out_name <- 'mean4maxOzone'
@@ -116,8 +116,8 @@ for (cc in 1 : length(n_neigh)) {
   plot_data <- rbind(plot_data, x)
 }
 
-
-
+# load('~/Documents/Research/Interference/Revisions/Application/results_sens_1.dat')
+# plot_data <- res$plot_data
 
 # ---------------------------------------- #
 # ------------ PAPER PLOTTING ------------ #
@@ -125,7 +125,7 @@ for (cc in 1 : length(n_neigh)) {
 
 g <- NULL
 nrow <- 1
-ncol <- 3
+ncol <- 2
 
 g[[1]] <- ggplot(aes(x = alpha, y = est, ymin = LB, ymax = UB),
                  data = subset(plot_data, quant == 'DE')) +
@@ -162,5 +162,5 @@ g[[3]] <- ggplot(aes(x = alpha, y = est, ymin = LB, ymax = UB),
         strip.text.x = element_blank())
 
 
-grid.arrange(grobs = g, nrow = ncol, ncol = nrow, heights = c(1, 0.9, 1))
+grid.arrange(grobs = g, nrow = 3, ncol = 1, heights = c(1, 0.9, 1))
 

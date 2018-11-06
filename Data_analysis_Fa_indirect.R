@@ -22,6 +22,8 @@ out_name <- 'mean4maxOzone'
 ps_with_re <- TRUE
 B <- 500
 alpha_level <- 0.05
+save_results <- TRUE
+save_path <- '~/Documents/Research/Interference/Revisions/Application/'
 
 dta <- MakeFinalDataset(dta = subdta, hierarchical_method = hierarchical_method,
                         n_neigh = n_neigh, coord_names = coord_names,
@@ -145,4 +147,10 @@ boots_ie <- apply(boots[1, , ], 2, function(x) sum(x * prob_diff))
 c(ie_Falpha[1], quantile(boots_ie, probs = c(0, 1) + c(1, - 1) * alpha_level / 2))
 
 
+
+if (save_results) {
+  res <- list(yhat_group = yhat_group, boots = boots, scores = scores,
+              ie_var = ie_var, B = B)
+  save(res, file = paste0(save_path, 'results1_Falpha.dat'))
+}
 

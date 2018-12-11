@@ -1,5 +1,5 @@
 setwd('~/Github/Interference-Analysis/')
-load('~/Dropbox/DATAverse/subdta.dat')
+load('~/Dropbox/DATAverse/analysis_dat.dat')
 source('GetHierClusters_function.R')
 source('MakeFinalDataset_function.R')
 set.seed(1234)
@@ -26,6 +26,9 @@ B <- 2000
 ps_with_re <- TRUE
 num_alphas <- 40
 
+# Renaming the analysis data to subdta and excluding the NOx emissions column.
+subdta <- data.table::copy(analysis_dat)
+subdta[, totNOxemissions := NULL]
 dta <- MakeFinalDataset(dta = subdta, hierarchical_method = hierarchical_method,
                         n_neigh = n_neigh, coord_names = coord_names,
                         trt_name = trt_name, subset_clusters = FALSE)
@@ -148,7 +151,6 @@ res <- list(yhat_group = yhat_group, scores = scores, yhat_pop = yhat_pop,
             yhat_pop_var = yhat_pop_var, boots = boots, de = de, ie = ie)
 res$specs <- list(seed = 1234, B = B, num_alphas = num_alphas,
                   date = Sys.Date())
-save(res, file = '~/Documents/Research/Interference/Revisions/Application/results2.dat')
 
 
 library(plot3D)

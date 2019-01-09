@@ -1,5 +1,5 @@
 setwd('~/Github/Interference-Analysis/')
-load('~/Dropbox/DATAverse/subdta.dat')
+load('~/Dropbox/DATAverse/analysis_dat.dat')
 source('GetHierClusters_function.R')
 source('MakeFinalDataset_function.R')
 
@@ -26,6 +26,9 @@ B <- 3
 alpha_level <- 0.05
 num_alphas <- 5
 
+# Renaming the analysis data to subdta and excluding the NOx emissions column.
+subdta <- data.table::copy(analysis_dat)
+subdta[, totNOxemissions := NULL]
 
 cov_names <- c('pctCapacity_byHI', 'logHeatInput', 'Phase2', 'mostlyGas',
                'small_nunits', 'med_nunits', 'mean4MaxTemp', 'PctUrban',

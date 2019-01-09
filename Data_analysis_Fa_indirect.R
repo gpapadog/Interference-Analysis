@@ -1,5 +1,5 @@
 setwd('~/Github/Interference-Analysis/')
-load('~/Dropbox/DATAverse/subdta.dat')
+load('~/Dropbox/DATAverse/analysis_dat.dat')
 source('GetHierClusters_function.R')
 source('MakeFinalDataset_function.R')
 
@@ -25,6 +25,9 @@ alpha_level <- 0.05
 save_results <- TRUE
 save_path <- '~/Documents/Research/Interference/Revisions/Application/'
 
+# Renaming the analysis data to subdta and excluding the NOx emissions column.
+subdta <- data.table::copy(analysis_dat)
+subdta[, totNOxemissions := NULL]
 dta <- MakeFinalDataset(dta = subdta, hierarchical_method = hierarchical_method,
                         n_neigh = n_neigh, coord_names = coord_names,
                         trt_name = trt_name, subset_clusters = FALSE)

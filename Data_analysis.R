@@ -23,7 +23,7 @@ out_name <- 'mean4maxOzone'
 estimand <- '1'  # Set to '1' for the estimand depending on covariates.
                  # Set to '2' for pi-estimand.
 B <- 2000
-ps_with_re <- TRUE
+ps_with_re <- TRUE  # The propensity score includes cluster random effects.
 num_alphas <- 40
 
 # Renaming the analysis data to subdta and excluding the NOx emissions column.
@@ -92,6 +92,7 @@ boots_est <- BootVar(dta = dta, B = B, alpha = alpha, ps = 'est',
                      verbose = TRUE, trt_col = trt_col, out_col = out_col,
                      return_everything = TRUE)
 
+# How many of the bootstrap samples had random effect variance positive.
 re_var_positive <- boots_est$re_var_positive
 table(re_var_positive)
 boots <- boots_est$boots
@@ -108,7 +109,10 @@ ie <- IE(ygroup = yhat_group[, 1, ], ps = 'estimated', boots = boots,
 
 # ------------  PLOTTING ------------ #
 
-plot_boot <- 3
+# Specify plot_boot to be 1, 2, or 3 for the different calculations of CIs.
+# 1 corresponds to asymptotic, 2 uses variance of bootstrap samples, 3 uses
+# bootstrap quantiles.
+plot_boot <- 1
 index_low <- ifelse(plot_boot == 1, 3, ifelse(plot_boot == 2, 6, 8))
 index_high <- index_low + 1
 

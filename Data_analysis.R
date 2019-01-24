@@ -51,13 +51,19 @@ cov_names <- c('pctCapacity_byHI', 'logHeatInput', 'Phase2', 'mostlyGas',
 cov_cols <- which(names(dta) %in% cov_names)
 cov_names <- names(dta)[cov_cols]
 
-glm_form <- paste('Trt ~ (1 | neigh) +', paste(cov_names, collapse = ' + '))
-glmod <- glmer(as.formula(glm_form), data = dta, family = 'binomial',
-               control = glmerControl(optimizer = "bobyqa",
-                                      optCtrl = list(maxfun = 2e5)))
+if (ps_with_re) {
+  glm_form <- paste('Trt ~ (1 | neigh) +', paste(cov_names, collapse = ' + '))
+  glmod <- glmer(as.formula(glm_form), data = dta, family = 'binomial',
+                 control = glmerControl(optimizer = "bobyqa",
+                                        optCtrl = list(maxfun = 2e5)))
+  phi_hat <- list(coefs = summary(glmod)$coef[, 1],
+                  re_var = as.numeric(summary(glmod)$varcor))
+} else {
+  glm_form <- paste('Trt ~ ', paste(cov_names, collapse = ' + '))
+  glmod <- glm(as.formula(glm_form), data = dta, family = 'binomial')
+  phi_hat <- list(coefs = summary(glmod)$coef[, 1], re_var = 0)
+}
 
-phi_hat <- list(coefs = summary(glmod)$coef[, 1],
-                re_var = as.numeric(summary(glmod)$varcor))
 
 # ----------- Calculating the IPW ----------- #
 

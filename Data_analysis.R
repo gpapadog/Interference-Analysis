@@ -23,7 +23,8 @@ out_name <- 'mean4maxOzone'
 estimand <- '1'  # Set to '1' for the estimand depending on covariates.
                  # Set to '2' for pi-estimand.
 B <- 2000
-ps_with_re <- TRUE  # The propensity score includes cluster random effects.
+ps_with_re <- FALSE  # The propensity score includes cluster random effects.
+numerator_with_re <- TRUE  # Coefficients in numerator are from PS with RE.
 num_alphas <- 40
 
 # Renaming the analysis data to subdta and excluding the NOx emissions column.
@@ -35,7 +36,7 @@ dta <- MakeFinalDataset(dta = subdta, hierarchical_method = hierarchical_method,
 obs_alpha <- dta$obs_alpha
 dta <- dta$data
 
-# ----------- Fitting the propensity score model ------------ #s
+# ----------- Reforming the data ------------ #
 
 dta[, MedianHHInc := scale(MedianHHInc)]
 dta[, MedianHValue := scale(MedianHValue)]
@@ -51,6 +52,9 @@ cov_names <- c('pctCapacity_byHI', 'logHeatInput', 'Phase2', 'mostlyGas',
 cov_cols <- which(names(dta) %in% cov_names)
 cov_names <- names(dta)[cov_cols]
 
+
+# ----------- Fitting the propensity score model ------------ #
+
 if (ps_with_re) {
   glm_form <- paste('Trt ~ (1 | neigh) +', paste(cov_names, collapse = ' + '))
   glmod <- glmer(as.formula(glm_form), data = dta, family = 'binomial',
@@ -65,6 +69,21 @@ if (ps_with_re) {
 }
 
 
+# ---------- Coefficients of counterfactual treatment allocation ----------- #
+
+if (numerator_with_re) {
+  gamma_form <- paste('Trt ~ (1 | neigh) +', paste(cov_names, collapse = ' + '))
+  gamma_glmod <- glmer(as.formula(gamma_form), data = dta, family = 'binomial',
+                       control = glmerControl(optimizer = "bobyqa",
+                                              optCtrl = list(maxfun = 2e5)))
+} else {
+  gamma_form <- paste('Trt ~ ', paste(cov_names, collapse = ' + '))
+  gamma_glmod <- glm(as.formula(gamma_form), data = dta, family = 'binomial')
+}
+gamma_numer <- summary(gamma_glmod)$coef[, 1]
+rm(list = c('gamma_form', 'gamma_glmod'))
+
+
 # ----------- Calculating the IPW ----------- #
 
 trt_col <- which(names(dta) == 'Trt')
@@ -76,7 +95,11 @@ alpha <- sort(c(alpha, 0.1, 0.4))
 
 yhat_group <- GroupIPW(dta = dta, cov_cols = cov_cols, phi_hat = phi_hat,
                        alpha = alpha, trt_col = trt_col, out_col = out_col,
-                       estimand = estimand)$yhat_group
+                       estimand = estimand,
+                       gamma_numer = gamma_numer)$yhat_group
+
+
+# ----------- Getting the asymptotic and bootstrap CIs ----------- #
 
 scores <- CalcScore(dta = dta, neigh_ind = NULL, phi_hat = phi_hat,
                     cov_cols = cov_cols, trt_name = 'Trt')
@@ -98,11 +121,11 @@ table(re_var_positive)
 boots <- boots_est$boots
 
 
-# --------- Direct effect ----------- #
+# --------- Direct and indirect effect ----------- #
+
 de <- DE(ypop = yhat_pop, ypop_var = yhat_pop_var, boots = boots,
          alpha = alpha, alpha_level = 0.05)
 
-# --------- Indirect effect ----------- #
 ie <- IE(ygroup = yhat_group[, 1, ], ps = 'estimated', boots = boots,
          scores = scores, alpha_level = 0.05)
 
@@ -112,7 +135,7 @@ ie <- IE(ygroup = yhat_group[, 1, ], ps = 'estimated', boots = boots,
 # Specify plot_boot to be 1, 2, or 3 for the different calculations of CIs.
 # 1 corresponds to asymptotic, 2 uses variance of bootstrap samples, 3 uses
 # bootstrap quantiles.
-plot_boot <- 1
+plot_boot <- 3
 index_low <- ifelse(plot_boot == 1, 3, ifelse(plot_boot == 2, 6, 8))
 index_high <- index_low + 1
 
@@ -160,8 +183,11 @@ ggplot(data = res_df, aes(x = alpha, y = V1, group = quant)) +  geom_line() +
 res <- list(yhat_group = yhat_group, scores = scores, yhat_pop = yhat_pop,
             yhat_pop_var = yhat_pop_var, boots = boots, de = de, ie = ie)
 res$specs <- list(seed = 1234, B = B, num_alphas = num_alphas,
-                  date = Sys.Date())
+                  date = Sys.Date(), ps_with_re = ps_with_re,
+                  estimand = estimand,
+                  numerator_with_re = numerator_with_re)
 
+# save(res, file = '~/Documents/Research/Interference/Revisions/Application/ps_wo_re/numerator_with_re/results.dat')
 
 library(plot3D)
 par(mar = c(1, 1, 1, 3))
